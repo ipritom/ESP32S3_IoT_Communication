@@ -9,13 +9,14 @@
 #include "mqtt_client.h"
 
 #include "nvs_flash.h"
+#include "driver/timer.h"
 
 // development
 #include "x_wifi_config.h"
 #include "frame_utils.h"
 
 // mqtt ////////////////////////
-#define MQTT_BROKER_URI "mqtt://192.168.180.74" // Public broker for testing
+#define MQTT_BROKER_URI "mqtt://192.168.30.74" // Public broker for testing
 #define MQTT_USERNAME "admin"
 #define MQTT_PASSWORD "admin"
 #define MQTT_PORT 1883
@@ -95,6 +96,56 @@ void mqtt_app_start()
     ESP_LOGI("MQTT", "MQTT client started");
 }
 
+typedef struct countDown_sec_t {
+    uint64_t timer_value_us;
+    uint64_t timer_stop;
+    uint32_t set_value;
+} countDown_sec_t;
+
+countDown_sec_t get_countdown_sec(uint32_t sec){
+    uint64_t timer_now = 0;
+    ESP_ERROR_CHECK(timer_get_counter_value(TIMER_GROUP_0, TIMER_0, &timer_now));
+    countDown_sec_t countDown_sec;
+    countDown_sec.set_value = sec;
+    countDown_sec.timer_value_us = timer_now;
+    countDown_sec.timer_stop = timer_now + (sec * 1000000); // 1 sec = 1000000 us
+    return countDown_sec;
+}
+
+uint8_t get_countdown_sec_status(countDown_sec_t countDown_sec){
+    uint64_t timer_now = 0;
+    ESP_ERROR_CHECK(timer_get_counter_value(TIMER_GROUP_0, TIMER_0, &timer_now));
+    if (timer_now >= countDown_sec.timer_stop) {
+        return 1; // countdown finished
+    } else {
+        return 0; // countdown not finished
+    }
+}
+
+void count_down_timer_reset(countDown_sec_t *countDown_sec){
+    uint64_t timer_now = 0;
+    ESP_ERROR_CHECK(timer_get_counter_value(TIMER_GROUP_0, TIMER_0, &timer_now));
+    countDown_sec->timer_value_us = timer_now;
+    countDown_sec->timer_stop = timer_now + (countDown_sec->set_value * 1000000); // 1 sec = 1000000 us    
+}
+
+void esp_timer_config(){
+    // timer configuration
+    timer_config_t timer_conf = {
+        .divider = 80, // 1 tick = 1 us
+        .counter_dir = TIMER_COUNT_UP,
+        .counter_en = TIMER_PAUSE,
+        .alarm_en = TIMER_ALARM_EN,
+        .auto_reload = 1,
+    }; // default clock source is APB
+    
+    timer_init(TIMER_GROUP_0, TIMER_0, &timer_conf);
+    timer_set_counter_value(TIMER_GROUP_0, TIMER_0, 0);
+    timer_start(TIMER_GROUP_0, TIMER_0);
+}
+
+
+
 void app_main(void)
 {
     //Initialize NVS ////////////////////////
@@ -111,8 +162,18 @@ void app_main(void)
     mqtt_app_start();
     // process frame
 
+    // init timer
+    esp_timer_config();
+
+    countDown_sec_t countDown_sec = get_countdown_sec(5); // 5 sec countdown
+
     while (1)
     {
+        if(get_countdown_sec_status(countDown_sec)){
+            printf("countdown finished\n");
+            count_down_timer_reset(&countDown_sec);
+        }
+
       //process mqtt frame 
       if(mqtt_data_received_and_cleared()){
         int frame_length;
@@ -131,7 +192,7 @@ void app_main(void)
       }
 
 
-      vTaskDelay(1000 / portTICK_PERIOD_MS);
+      vTaskDelay(20 / portTICK_PERIOD_MS);
     }
     
 

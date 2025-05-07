@@ -8,7 +8,7 @@
 
 // WIFI ////////////////////////
 
-#define EXAMPLE_ESP_WIFI_SSID      "RPM IoT Lab - 44"
+#define EXAMPLE_ESP_WIFI_SSID      "RPM IoT Lab-55"
 #define EXAMPLE_ESP_WIFI_PASS      "password@iiT"
 #define EXAMPLE_ESP_MAXIMUM_RETRY  10
 /* FreeRTOS event group to signal when we are connected*/
